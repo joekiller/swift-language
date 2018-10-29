@@ -12,7 +12,7 @@ license=('apache')
 depends=('python2' 'libutil-linux' 'icu' 'libbsd' 'libedit' 'libxml2'
          'sqlite' 'ncurses' 'libblocksruntime')
 makedepends=('git' 'cmake' 'ninja' 'swig' 'clang>=5.0' 'python2-six' 'perl'
-             'python2-sphinx' 'python2-requests' 'rsync')
+             'python2-sphinx' 'python2-requests' 'rsync' 'python-virtualenv')
 
 source=(
     "swift-${_swiftver}.tar.gz::https://github.com/apple/swift/archive/swift-${_swiftver}.tar.gz"
@@ -46,20 +46,6 @@ sha256sums=('c3460029a32826a3c2385f53efc5f8e54f61152fb14951ad2c8a9825d14c8cda'
             '6a94de9adbdc4182b297e0011a68c9387fd25864dcb4386654218c8c530032c2')
 
 prepare() {
-    # Use python2 where appropriate
-    find "$srcdir" -type f -print0 | \
-         xargs -0 sed -i 's|/usr/bin/env python$|&2|;s|/usr/bin/python$|&2|'
-    find "$srcdir/swift-lldb-swift-${_swiftver}" -name Makefile -print0 | \
-         xargs -0 sed -i 's|python-config|python2-config|g'
-    sed -i '/^cmake_minimum_required/a set(Python_ADDITIONAL_VERSIONS 2.7)' \
-         "$srcdir/swift-swift-${_swiftver}/CMakeLists.txt"
-    sed -i '/^cmake_minimum_required/a set(Python_ADDITIONAL_VERSIONS 2.7)' \
-         "$srcdir/swift-lldb-swift-${_swiftver}/CMakeLists.txt"
-    sed -i 's/\<python\>/&2/' \
-         "$srcdir/swift-swift-${_swiftver}/utils/build-script-impl" \
-         "$srcdir/swift-swift-${_swiftver}/test/sil-passpipeline-dump/basic.test-sh" \
-         "$srcdir/swift-swift-${_swiftver}/test/Driver/response-file.swift"
-
     # Use directory names which build-script expects
     for sdir in llvm clang lldb cmark llbuild compiler-rt; do
         rm -rf ${sdir}
@@ -80,6 +66,8 @@ prepare() {
 
     # Backport compiler-rt SVN r333213
     ( cd compiler-rt && patch -p1 -i "$srcdir/0001-sanitizer-Use-pre-computed-size-of-struct-ustat.patch" )
+
+    virtualenv -p python2.7 swiftpy
 }
 
 _common_build_params=(
@@ -90,9 +78,11 @@ _common_build_params=(
     --xctest
     --foundation
     --libdispatch
+    '--extra-cmake-options=-DPYTHON_EXECUTABLE=/usr/bin/python2.7 -DPYTHON_INCLUDE_DIR=/usr/include/python2.7 -DPYTHON_LIBRARIES=/usr/lib/libpython2.7.so'
 )
 
 _build_script_wrapper() {
+    . "$srcdir/swiftpy/bin/activate"
     export SWIFT_SOURCE_ROOT="$srcdir"
     ./utils/build-script "$@"
 }
@@ -109,12 +99,6 @@ build() {
 
 check() {
     cd "$srcdir/swift"
-
-    # Fix the lldb swig binding's import path (matches Arch LLDB package)
-    # Need to do this here as well as the install since the test suite
-    # uses the lldb python bindings directly from the build dir
-    sed -i "/import_module('_lldb')/s/_lldb/lldb.&/" \
-        "${srcdir}/build/Ninja-ReleaseAssert/lldb-linux-${CARCH}/lib/python2.7/site-packages/lldb/__init__.py"
 
     _build_script_wrapper -R -t --skip-test-sourcekit
 }
@@ -171,14 +155,4 @@ package_swift-lldb() {
     _build_script_wrapper -R "${_common_build_params[@]}" \
         --install-destdir="$pkgdir" \
         --install-lldb
-
-    # Fix the lldb swig binding's import path (matches Arch LLDB package)
-    # We have to do this again because the build-script recreates the "bad"
-    # version of the source file.
-    sed -i "/import_module('_lldb')/s/_lldb/lldb.&/" \
-        "${pkgdir}/usr/lib/python2.7/site-packages/lldb/__init__.py"
-
-    # This should be provided from python2-six
-    rm "$pkgdir/usr/lib/python2.7/site-packages/six.py"
-    rm "$pkgdir/usr/lib/python2.7/site-packages/six.pyc"
 }
