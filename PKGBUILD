@@ -14,60 +14,16 @@ depends=('python2' 'libutil-linux' 'icu' 'libbsd' 'libedit' 'libxml2'
 makedepends=('git' 'cmake' 'ninja' 'swig' 'clang>=5.0' 'python2-six' 'perl'
              'python2-sphinx' 'python2-requests' 'rsync' 'python-virtualenv')
 
-source=(
-    "swift-${_swiftver}.tar.gz::https://github.com/apple/swift/archive/swift-${_swiftver}.tar.gz"
-    "swift-llvm-${_swiftver}.tar.gz::https://github.com/apple/swift-llvm/archive/swift-${_swiftver}.tar.gz"
-    "swift-clang-${_swiftver}.tar.gz::https://github.com/apple/swift-clang/archive/swift-${_swiftver}.tar.gz"
-    "swift-lldb-${_swiftver}.tar.gz::https://github.com/apple/swift-lldb/archive/swift-${_swiftver}.tar.gz"
-    "swift-cmark-${_swiftver}.tar.gz::https://github.com/apple/swift-cmark/archive/swift-${_swiftver}.tar.gz"
-    "swift-llbuild-${_swiftver}.tar.gz::https://github.com/apple/swift-llbuild/archive/swift-${_swiftver}.tar.gz"
-    "swift-package-manager-${_swiftver}.tar.gz::https://github.com/apple/swift-package-manager/archive/swift-${_swiftver}.tar.gz"
-    "swift-corelibs-xctest-${_swiftver}.tar.gz::https://github.com/apple/swift-corelibs-xctest/archive/swift-${_swiftver}.tar.gz"
-    "swift-corelibs-foundation-${_swiftver}.tar.gz::https://github.com/apple/swift-corelibs-foundation/archive/swift-${_swiftver}.tar.gz"
-    "swift-corelibs-libdispatch-${_swiftver}.tar.gz::https://github.com/apple/swift-corelibs-libdispatch/archive/swift-${_swiftver}.tar.gz"
-    "swift-compiler-rt-${_swiftver}.tar.gz::https://github.com/apple/swift-compiler-rt/archive/swift-${_swiftver}.tar.gz"
-    "swift-integration-tests-${_swiftver}.tar.gz::https://github.com/apple/swift-integration-tests/archive/swift-${_swiftver}.tar.gz"
-    "0001-sanitizer-Use-pre-computed-size-of-struct-ustat.patch"
-    "glibc-includes.patch"
-)
-sha256sums=('c3460029a32826a3c2385f53efc5f8e54f61152fb14951ad2c8a9825d14c8cda'
-            '24034e5bed1c93520a983105fa6be537de27168ba53bd49abfb5780feb80c81d'
-            'c10b9a0a2f93d8c1c213dfdd26333a98fcd2090fc8fa9308dc98b86690dde659'
-            'a81986e08ee275741754ebe1c52b9ff186a558ec41400a18d45578b24ba4a262'
-            '4ba2a83e065728e47ee3859de90f567cefa46be400e870b2d3a3addf04471a5d'
-            'c19ffe8464530d3fc78e9bf2b07ebefa6b266b994200654ed2da04cbc5a070b6'
-            '9b3dd8e22fe97645bdf3050fc6976991e862380febf28eb24955302f905e6e8a'
-            '3d2a8ce08302365e1fe9086d3a778b3a238e027d9c96b17163b8e3fc2d003be0'
-            'f3f6368d5e85fe47a148eb28e675f522e3064c217153ddff1aa82b97696202ef'
-            '3ffbe7b13482d98a073b1de61b7a6b9b04eb6d8f8c841c61c1ed4de85c63403d'
-            '489438f3405835d698b46b35b1210c9312d63c805f888c7b8cf66f1e1d687157'
-            '0dc8c77a7ee285e18886168eb8a7973f7097bf742f3213a2261bbd0b754fa9e7'
-            '5cd08c3a83c71e552fa2fd9ec8b076fbd25ba5450b9ecd59a0c877a9c9407b34'
-            '6a94de9adbdc4182b297e0011a68c9387fd25864dcb4386654218c8c530032c2')
+source=('project_name::git+https://github.com/apple/swift.git#branch=stable')
+sha1sums=(SKIP)
 
 prepare() {
-    # Use directory names which build-script expects
-    for sdir in llvm clang lldb cmark llbuild compiler-rt; do
-        rm -rf ${sdir}
-        mv swift-${sdir}-swift-${_swiftver} ${sdir}
-    done
-    for sdir in corelibs-xctest corelibs-foundation corelibs-libdispatch \
-                integration-tests
-    do
-        rm -rf ${sdir}
-        mv swift-${sdir}-swift-${_swiftver} swift-${sdir}
-    done
-    rm -rf swift swiftpm
-    mv swift-swift-${_swiftver} swift
-    mv swift-package-manager-swift-${_swiftver} swiftpm
-
-    # Fix wrong glibc include paths in glibc module map
-    ( cd swift && patch -p1 -i "$srcdir/glibc-includes.patch" )
-
-    # Backport compiler-rt SVN r333213
-    ( cd compiler-rt && patch -p1 -i "$srcdir/0001-sanitizer-Use-pre-computed-size-of-struct-ustat.patch" )
-
     virtualenv -p python2.7 swiftpy
+    . swiftpy/bin/activate
+    pip install -y sphinx
+  
+    mv swift swift-dev
+    ./swift-dev/utils/update-checkout
 }
 
 _common_build_params=(
@@ -91,10 +47,8 @@ build() {
     cd "$srcdir/swift"
 
     export PATH="$PATH:/usr/bin/core_perl"
-    # sourcekit (STILL) doesn't link correctly on Linux.  Disable for now :(
     _build_script_wrapper -R "${_common_build_params[@]}" \
-        --extra-cmake-options="-DSWIFT_BUILD_SOURCEKIT=FALSE" \
-        --skip-test-sourcekit
+        --extra-cmake-options="-DSOURCEKIT_INSTALLING_INPROC=TRUE"
 }
 
 check() {
@@ -125,7 +79,7 @@ package_swift() {
         ln -s swift "$pkgdir/usr/bin/swiftc"
         ln -s swift "$pkgdir/usr/bin/swift-autolink-extract"
 
-        #install -m644 lib/libsourcekitdInProc.so "$pkgdir/usr/lib"
+        install -m644 lib/libsourcekitdInProc.so "$pkgdir/usr/lib"
 
         install -dm755 "$pkgdir/usr/share/man/man1"
         install -m644 docs/tools/swift.1 "$pkgdir/usr/share/man/man1"
