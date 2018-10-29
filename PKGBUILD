@@ -22,6 +22,9 @@ prepare() {
     . swiftpy/bin/activate
     pip install sphinx
     ./swift-dev/utils/update-checkout --clone
+
+    # Fix wrong glibc include paths in glibc module map
+    ( cd swift && patch -p1 -i "$srcdir/glibc-includes.patch" )
 }
 
 _common_build_params=(
