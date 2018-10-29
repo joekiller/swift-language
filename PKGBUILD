@@ -14,16 +14,14 @@ depends=('python2' 'libutil-linux' 'icu' 'libbsd' 'libedit' 'libxml2'
 makedepends=('git' 'cmake' 'ninja' 'swig' 'clang>=5.0' 'python2-six' 'perl'
              'python2-sphinx' 'python2-requests' 'rsync' 'python-virtualenv')
 
-source=('project_name::git+https://github.com/apple/swift.git#branch=stable')
+source=('swift-dev::git+https://github.com/apple/swift.git#branch=stable')
 sha1sums=(SKIP)
 
 prepare() {
     virtualenv -p python2.7 swiftpy
     . swiftpy/bin/activate
-    pip install -y sphinx
-  
-    mv swift swift-dev
-    ./swift-dev/utils/update-checkout
+    pip install sphinx
+    ./swift-dev/utils/update-checkout --clone
 }
 
 _common_build_params=(
@@ -34,7 +32,7 @@ _common_build_params=(
     --xctest
     --foundation
     --libdispatch
-    '--extra-cmake-options=-DPYTHON_EXECUTABLE=/usr/bin/python2.7 -DPYTHON_INCLUDE_DIR=/usr/include/python2.7 -DPYTHON_LIBRARIES=/usr/lib/libpython2.7.so'
+    '--extra-cmake-options=-DPYTHON_EXECUTABLE=/usr/bin/python2.7 -DPYTHON_INCLUDE_DIR=/usr/include/python2.7 -DPYTHON_LIBRARY=/usr/lib/libpython2.7.so -DPYTHON_RELEASE_LIB=/usr/lib/libpython2.7.so'
 )
 
 _build_script_wrapper() {
@@ -44,7 +42,7 @@ _build_script_wrapper() {
 }
 
 build() {
-    cd "$srcdir/swift"
+    cd "$srcdir/swift-dev"
 
     export PATH="$PATH:/usr/bin/core_perl"
     _build_script_wrapper -R "${_common_build_params[@]}" \
